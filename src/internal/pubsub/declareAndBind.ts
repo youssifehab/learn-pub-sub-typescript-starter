@@ -1,6 +1,6 @@
 import amqp, { type Channel, type Replies } from "amqplib";
 
-type SimpleQueueType = "durable" | "transient";
+export type SimpleQueueType = "durable" | "transient";
 
 export async function declareAndBind(
   conn: amqp.ChannelModel,
