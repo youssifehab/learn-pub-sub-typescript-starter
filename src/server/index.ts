@@ -62,7 +62,7 @@ async function main() {
 
   process.on("SIGINT", async () => {
     console.log("\n🛑 Shutting down gracefully...");
-    (await connection).close();
+    connection.close();
     console.log("🔒 Connection closed. Goodbye!");
     process.exit(0);
   });

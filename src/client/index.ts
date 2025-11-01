@@ -7,14 +7,19 @@ import {
   printQuit,
 } from "../internal/gamelogic/gamelogic.js";
 import { declareAndBind } from "../internal/pubsub/declareAndBind.js";
-import { ExchangePerilDirect, PauseKey } from "../internal/routing/routing.js";
+import {
+  ExchangePerilDirect,
+  ExchangePerilTopic,
+  PauseKey,
+} from "../internal/routing/routing.js";
 import {
   GameState,
   type PlayingState,
 } from "../internal/gamelogic/gamestate.js";
 import { commandSpawn } from "../internal/gamelogic/spawn.js";
-import { commandMove } from "../internal/gamelogic/move.js";
+import { commandMove, handleMove } from "../internal/gamelogic/move.js";
 import { subscribeJSON } from "../internal/pubsub/subscribeJSON.js";
+import type { ArmyMove } from "../internal/gamelogic/gamedata.js";
 
 async function main() {
   console.log("Starting Peril client...");
@@ -26,15 +31,15 @@ async function main() {
   const username: string = await clientWelcome();
   console.log(`👋 Welcome, ${username}!`);
 
-  const queueName = `${PauseKey}.${username}`;
+  const pauseQueueName = `${PauseKey}.${username}`;
 
-  const [channel, q] = await declareAndBind(
-    connection,
-    ExchangePerilDirect,
-    queueName,
-    PauseKey,
-    "transient"
-  );
+  // const [channel, q] = await declareAndBind(
+  //   connection,
+  //   ExchangePerilDirect,
+  //   queueName,
+  //   PauseKey,
+  //   "transient"
+  // );
 
   const gameState = new GameState(username);
   console.log(`🧠 Game state initialized for ${username}`);
@@ -42,13 +47,39 @@ async function main() {
   await subscribeJSON(
     connection,
     ExchangePerilDirect,
-    queueName,
+    pauseQueueName,
     PauseKey,
     "transient",
     handlerPause(gameState)
   );
 
-  console.log(`🎮 Listening for pause/resume messages on ${queueName}`);
+  console.log(`🎮 Listening for pause/resume messages on ${pauseQueueName}`);
+
+  const armyQueueName = `army_moves.${username}`;
+  const armyRoutingKey = "army_moves.*";
+
+  const [armyChannel, armyQ] = await declareAndBind(
+    connection,
+    ExchangePerilTopic,
+    armyQueueName,
+    armyRoutingKey,
+    "transient"
+  );
+
+  console.log(
+    `🪖 Listening for army moves on queue "${armyQueueName}" bound to "${armyRoutingKey}"`
+  );
+
+  await subscribeJSON(
+    connection,
+    ExchangePerilTopic,
+    armyQueueName,
+    armyRoutingKey,
+    "transient",
+    async (moveMsg) => {
+      handleMove(gameState, moveMsg as ArmyMove);
+    }
+  );
 
   while (true) {
     const words = await getInput("> ");
@@ -68,7 +99,17 @@ async function main() {
     } else if (words[0] === "move") {
       try {
         const move = commandMove(gameState, words);
-        console.log(move);
+
+        const channel = await connection.createChannel();
+        const routingKey = `army_moves.${username}`;
+        await channel.publish(
+          ExchangePerilTopic,
+          routingKey,
+          Buffer.from(JSON.stringify(move))
+        );
+        console.log(`📤 Move published to ${routingKey}`);
+
+        await channel.close();
       } catch (err) {
         if (err instanceof Error) {
           console.log(err.message);
@@ -92,7 +133,7 @@ async function main() {
 
   process.on("SIGINT", async () => {
     console.log("\n🛑 Shutting down gracefully...");
-    (await connection).close();
+    connection.close();
     console.log("🔒 Connection closed. Goodbye!");
     process.exit(0);
   });
