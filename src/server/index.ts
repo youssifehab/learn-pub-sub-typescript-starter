@@ -17,7 +17,7 @@ async function main() {
   console.log("📡 Confirm channel created!");
 
   while (true) {
-    const words = await getInput();
+    const words = await getInput("> ");
     if (words.length === 0) continue;
 
     if (words[0] === "pause") {
