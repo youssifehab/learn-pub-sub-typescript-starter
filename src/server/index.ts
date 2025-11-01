@@ -1,8 +1,14 @@
 import amqp, { type ConfirmChannel } from "amqplib";
 import { publishJSON } from "../internal/pubsub/publishJSON.js";
-import { ExchangePerilDirect, PauseKey } from "../internal/routing/routing.js";
+import {
+  ExchangePerilDirect,
+  ExchangePerilTopic,
+  GameLogSlug,
+  PauseKey,
+} from "../internal/routing/routing.js";
 import type { PlayingState } from "../internal/gamelogic/gamestate.js";
 import { getInput, printServerHelp } from "../internal/gamelogic/gamelogic.js";
+import { declareAndBind } from "../internal/pubsub/declareAndBind.js";
 
 async function main() {
   console.log("Starting Peril server...");
@@ -15,6 +21,19 @@ async function main() {
 
   const channel: ConfirmChannel = await connection.createConfirmChannel();
   console.log("📡 Confirm channel created!");
+
+  const queueName = GameLogSlug;
+  const routingKey = `${GameLogSlug}.*`;
+  const [logChannel, q] = await declareAndBind(
+    connection,
+    ExchangePerilTopic,
+    queueName,
+    routingKey,
+    "durable"
+  );
+  console.log(
+    `📂 Durable queue "${q.queue}" bound to exchange "${ExchangePerilTopic}" with key "${routingKey}"`
+  );
 
   while (true) {
     const words = await getInput("> ");
