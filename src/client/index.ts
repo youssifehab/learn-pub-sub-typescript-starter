@@ -18,7 +18,7 @@ import {
 } from "../internal/gamelogic/gamestate.js";
 import { commandSpawn } from "../internal/gamelogic/spawn.js";
 import { commandMove, handleMove } from "../internal/gamelogic/move.js";
-import { subscribeJSON } from "../internal/pubsub/subscribeJSON.js";
+import { AckType, subscribeJSON } from "../internal/pubsub/subscribeJSON.js";
 import type { ArmyMove } from "../internal/gamelogic/gamedata.js";
 
 async function main() {
@@ -77,7 +77,7 @@ async function main() {
     armyRoutingKey,
     "transient",
     async (moveMsg) => {
-      handleMove(gameState, moveMsg as ArmyMove);
+      return handleMove(gameState, moveMsg as ArmyMove);
     }
   );
 
@@ -141,13 +141,14 @@ async function main() {
   console.log("Press Ctrl+C to stop the server.");
 }
 
-function handlerPause(gs: GameState): (ps: PlayingState) => void {
-  return (ps: PlayingState) => {
+function handlerPause(gs: GameState): (ps: PlayingState) => AckType {
+  return (ps: PlayingState): AckType => {
     if (ps.isPaused) {
       gs.pauseGame();
     } else {
       gs.resumeGame();
     }
+    return AckType.Ack;
   };
 }
 
